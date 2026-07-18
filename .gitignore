@@ -1,0 +1,35 @@
+# --- Secrets (see ADR-0009) ---
+# Real values live in .env, never committed. .env.example is committed.
+.env
+.env.*
+!.env.example
+
+# --- Terraform ---
+# State file — contains sensitive guest config, lives on R2 (ADR-0003).
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+
+# Local backend lock + provider cache (transient).
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+
+# Per-vars files: real values committed by nobody. Keep the .example.
+terraform/*.tfvars
+!terraform/terraform.tfvars.example
+terraform/*.auto.tfvars
+terraform/*.auto.tfvars.json
+
+# Plan files may contain sensitive diffs.
+terraform/**/*.tfplan
+
+# Crash logs may contain state + secrets.
+terraform/crash.log
+terraform/crash.*.log
+
+# --- Editor / OS noise ---
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/

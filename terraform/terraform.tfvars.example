@@ -1,0 +1,164 @@
+# Example tfvars — copy to terraform.tfvars (gitignored) and edit. NEVER put
+# secrets here; they go in .env (see ADR-0009).
+#
+# The whole inventory is data. Adding/removing a guest = editing one line.
+# Map keys are stable identifiers — renaming = destroy+recreate (ADR-0005).
+
+node_name   = "pve01"
+tags_global = ["iac"]
+
+# --- LXCs -------------------------------------------------------------------
+# All current values below mirror the operator's existing homelab. os_template
+# must match a real LXC template present on pve01's storage (check with
+# `pveam list local` on the host).
+#
+# Module defaults already set: unprivileged=true, nesting=true, keyctl=true,
+# start_on_boot=true, DHCP networking on vmbr0, datastore=local-lvm, DNS
+# 1.1.1.1/8.8.8.8 search htrung.dev. Don't repeat those here.
+
+lxcs = {
+  cloudflared = {
+    vmid          = 100
+    expected_ip   = "192.168.1.123"
+    description   = "Cloudflare tunnel"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 1
+    memory_mb     = 512
+    disk_gb       = 2
+    tags          = ["ingress"]
+  }
+  adguard = {
+    vmid          = 101
+    expected_ip   = "192.168.1.125"
+    description   = "DNS/ad-block, protected"
+    os_template   = "local:vztmpl/alpine-3.24-default_20240807_amd64.tar.xz"
+    os_type       = "alpine"
+    cores         = 1
+    memory_mb     = 512
+    disk_gb       = 2
+    tags          = ["dns", "protected"]
+  }
+  hermesagent = {
+    vmid          = 102
+    expected_ip   = "192.168.1.126"
+    description   = "Runs this agent"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 2
+    memory_mb     = 4096
+    disk_gb       = 20
+    tags          = ["agent"]
+  }
+  cloudflare-ddns = {
+    vmid          = 103
+    expected_ip   = "192.168.1.127"
+    description   = "DDNS updater"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 1
+    memory_mb     = 1024
+    disk_gb       = 3
+    tags          = ["network"]
+  }
+  prowlarr = {
+    vmid          = 109
+    expected_ip   = "192.168.1.133"
+    description   = "Indexer manager"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 1
+    memory_mb     = 1024
+    disk_gb       = 4
+    tags          = ["media"]
+  }
+  radarr = {
+    vmid          = 110
+    expected_ip   = "192.168.1.134"
+    description   = "Movie automation"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 1
+    memory_mb     = 1024
+    disk_gb       = 4
+    tags          = ["media"]
+  }
+  sonarr = {
+    vmid          = 111
+    expected_ip   = "192.168.1.135"
+    description   = "TV automation"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 1
+    memory_mb     = 1024
+    disk_gb       = 4
+    tags          = ["media"]
+  }
+  jellyfin = {
+    vmid          = 112
+    expected_ip   = "192.168.1.136"
+    description   = "Media server"
+    os_template   = "local:vztmpl/ubuntu-24.04-standard_24.04-1_amd64.tar.zst"
+    os_type       = "ubuntu"
+    cores         = 2
+    memory_mb     = 2048
+    disk_gb       = 8
+    tags          = ["media"]
+  }
+  beszel = {
+    vmid          = 113
+    expected_ip   = "192.168.1.137"
+    description   = "Monitoring hub"
+    os_template   = "local:vztmpl/debian-13-standard_13.0-1_amd64.tar.zst"
+    os_type       = "debian"
+    cores         = 1
+    memory_mb     = 512
+    disk_gb       = 5
+    tags          = ["monitoring"]
+  }
+}
+
+# --- VMs --------------------------------------------------------------------
+# Modeled as standalone — no clone block, no template_id (ADR-0008).
+# Verify each os_template path with `pveam list local` on the host before
+# copying this example to terraform.tfvars — the paths below are guesses
+# based on the operator inventory and may not match what's actually downloaded.
+
+vms = {
+  k3s_master01 = {
+    vmid          = 105
+    expected_ip   = "192.168.1.129"
+    description   = "k3s control-plane"
+    cores         = 2
+    memory_mb     = 4096
+    disk_gb       = 20
+    tags          = ["k3s", "control-plane"]
+  }
+  k3s_worker01 = {
+    vmid          = 106
+    expected_ip   = "192.168.1.130"
+    description   = "k3s worker"
+    cores         = 2
+    memory_mb     = 4096
+    disk_gb       = 20
+    tags          = ["k3s", "worker"]
+  }
+  k3s_worker02 = {
+    vmid          = 107
+    expected_ip   = "192.168.1.131"
+    description   = "k3s worker"
+    cores         = 2
+    memory_mb     = 4096
+    disk_gb       = 20
+    tags          = ["k3s", "worker"]
+  }
+  k3s_worker03 = {
+    vmid          = 108
+    expected_ip   = "192.168.1.132"
+    description   = "k3s worker"
+    cores         = 2
+    memory_mb     = 4096
+    disk_gb       = 20
+    tags          = ["k3s", "worker"]
+  }
+}
