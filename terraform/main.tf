@@ -1,9 +1,29 @@
-# Entry point. Provider config in provider.tf, backend in backend.tf,
-# version pins in versions.tf.
-#
-# Two module calls — one per guest kind (ADR-0004). Each is instantiated with
-# `for_each` over its inventory map (ADR-0005). Adding a guest is a tfvars
-# edit, not a code change.
+terraform {
+  required_version = ">= 1.10.0" # use_lockfile needs 1.10+
+
+  required_providers {
+    proxmox = {
+      source  = "bpg/proxmox"
+      version = "~> 0.111"
+    }
+  }
+
+  backend "s3" {
+    bucket = "tesseract-homelab"
+    key    = "default.tfstate"
+
+    region                      = "auto"
+    use_lockfile                = true
+    skip_credentials_validation = true
+    skip_metadata_api_check     = true
+    skip_region_validation      = true
+    skip_requesting_account_id  = true
+    use_path_style              = true # R2 has no cert for virtual-host-style
+  }
+}
+
+# Auth via env: PROXMOX_VE_ENDPOINT, PROXMOX_VE_API_TOKEN, PROXMOX_VE_INSECURE
+provider "proxmox" {}
 
 module "lxcs" {
   source   = "./modules/lxc"
