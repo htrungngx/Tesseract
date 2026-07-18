@@ -1,0 +1,118 @@
+# ADR 0009: Secrets handling — Tier 1 (`env` vars + CI secrets, tfvars is secret-free)
+
+- **Status:** Accepted
+- **Date:** 2026-07-17
+
+## Context
+
+Three distinct secrets exist in the homelab's orbit:
+
+| Secret | Consumer | Rotation |
+| --- | --- | --- |
+| Proxmox API token (`root@pam!terraform`, ADR-0002) | `terraform` CLI locally + CI | Rare; rotate on leak |
+| R2 access keys (ADR-0003, state backend) | `terraform` CLI locally + CI | Rare; rotate on leak |
+| Cloudflare tunnel token | `cloudflared` LXC (`100`) | Rotates; lives in a `.env` *on that LXC* |
+
+Key observation: **Terraform itself only needs the first two.** The Cloudflare
+tunnel token is consumed by the `cloudflared` service running inside LXC `100`,
+and per ADR-0006 Terraform does not install or configure software in guests.
+The tunnel token is therefore **out of scope for this repo** — it lives on the
+`cloudflared` LXC, not here.
+
+That shrinks Terraform's secret surface to two long-lived backend credentials.
+
+### Tiered options considered
+
+- **Tier 1.** Local `.env` (gitignored) sourced into the shell; CI injects
+  the same values via GitHub Actions repo secrets. tfvars is secret-free.
+- **Tier 2.** Tier 1, plus `.env` is generated from a password-manager CLI
+  (`op`, `bw`, `pass`, Apple Keychain) by a `scripts/sync-secrets` target,
+  so the laptop disk only ever holds secrets transiently.
+- **Tier 3.** HashiCorp Vault or a cloud secret manager. Rejected as
+  disproportionate ops burden for a homelab with two backend secrets.
+
+## Decision
+
+Adopt **Tier 1** today.
+
+### Rules (hold regardless of any future tier upgrade)
+
+1. **tfvars is secret-free.** Only data fields: `expected_ip`, `vmid`,
+   sizing (CPU/RAM/disk), OS name, tags, `onboot`, etc. Secrets are **env
+   vars only**.
+2. **`.env` is gitignored**, with a committed `.env.example` documenting the
+   variable names (never values).
+3. **`terraform.tfstate` is treated as secret** (per ADR-0003). Even though
+   tfvars has no secrets, the Proxmox provider may record sensitive guest
+   config in state. R2 bucket is private; state is never logged in CI; CI
+   `terraform plan` output is scrubbed or posted as a workflow artifact with
+   controlled access rather than dumped to the PR.
+4. **The Cloudflare tunnel token is out of scope for this repo.** It lives
+   in a `.env` on the `cloudflared` LXC, not in this repo, not in CI.
+
+### Concrete mechanics
+
+- **Local:** `.env` (gitignored, `chmod 600`) at the repo root, containing:
+  ```
+  # Proxmox (provider auth — see ADR-0002). bpg/proxmox uses PROXMOX_VE_* env
+  # vars (NOT PM_* — those are the legacy Telmate provider). Token is a single
+  # combined string: user@realm!tokenid=secret.
+  PROXMOX_VE_ENDPOINT=https://192.168.1.21:8006
+  PROXMOX_VE_API_TOKEN=root@pam!terraform=<populate from password manager>
+  PROXMOX_VE_INSECURE=true   # pve01 uses a self-signed cert
+
+  # R2 (state backend — see ADR-0003)
+  AWS_ACCESS_KEY_ID=...
+  AWS_SECRET_ACCESS_KEY=...
+  AWS_ENDPOINT_URL_S3=https://<accountid>.r2.cloudflarestorage.com
+  AWS_REGION=auto
+  ```
+  Sourced via `set -a; . ./.env; set +a` or a `direnv` `.envrc`. Terraform
+  auto-reads the provider's `PROXMOX_VE_*` env vars and the S3 backend's
+  `AWS_*` env vars.
+- **CI:** the same variable names stored as GitHub Actions repo secrets,
+  injected as `env:` in the workflow. The `.env` file is never used in CI.
+- **`.env.example`:** the variable names with placeholder values
+  (`PM_API_TOKEN_SECRET=<populate from password manager>`), committed.
+
+### Why no `sensitive = true` module variables today
+
+The `lxc` and `vm` modules take **no secret inputs** — the Proxmox token
+authenticates at the provider level, not per-resource. So there is nothing
+to mark `sensitive` and no risk of secret leakage in `plan` output from
+resource attributes. This becomes relevant only if a future module accepts a
+secret (e.g., a cloud-init seed); that module marks its secret inputs
+`sensitive = true` from day one.
+
+## Consequences
+
+- **Zero extra tooling.** No Vault, no password-manager CLI dependency.
+  Works on a fresh laptop clone with one `.env` file.
+- **`.env` is plaintext on the laptop disk.** Mitigated by `chmod 600`,
+  full-disk encryption on the dev machine (assumed), and the `.gitignore`
+  preventing the real failure mode (committing it). The two secrets it
+  holds are backend credentials, both revocable independently.
+- **CI secrets are per-repo in GitHub.** Standard, auditable, revocable.
+  Anyone with repo `admin` can rotate them; the `.env.example` documents
+  what's expected.
+- **The Cloudflare tunnel token remains a manual operational concern.**
+  Rotating it = SSH to LXC `100`, edit its `.env`, restart the service.
+  Not automated; not in this repo. A future "rotate tunnel token" runbook
+  captures this.
+- **Upgrading to Tier 2 is additive, not a rewrite.** When (if) it becomes
+  worth it, `.env` is regenerated by a script instead of edited by hand;
+  the variable names, gitignore, and CI mechanics all stay the same.
+
+## Future: Tier 2 (password-manager-backed `.env`)
+
+If `.env` rotation becomes painful or if multiple operators need the repo,
+add a `scripts/sync-secrets` that pulls from a password-manager CLI into
+`.env`. Triggered by pain, not by speculation. Lands as a small ADR
+superseding this one's *mechanism* (the four rules above stay).
+
+## References
+
+- ADR-0002 (Proxmox API token).
+- ADR-0003 (R2 state backend + its keys).
+- ADR-0006 (Terraform scope: shells only — why tunnel token is out of scope).
+- Terraform provider env-var convention: <https://developer.hashicorp.com/terraform/cli/config/environment-variables>
