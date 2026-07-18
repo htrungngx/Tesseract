@@ -58,8 +58,8 @@ and `proxmox_virtual_environment_container` for LXCs.
 
 ### R2 / Cloudflare R2
 Cloudflare's S3-compatible object storage. Used as the Terraform state backend
-for this repo. See ADR-0003. The state bucket is `tesseract-tfstate`
-(name chosen at one-time bootstrap).
+for this repo. The state bucket is `tesseract-homelab` (chosen at one-time
+bootstrap). See ADR-0003.
 
 ### `use_lockfile`
 S3 backend option (Terraform ≥ 1.10) that enables state locking via S3
@@ -67,7 +67,7 @@ conditional writes — no DynamoDB required. Used in this repo so R2 can serve
 as a lockable backend.
 
 ### State bootstrap (R2)
-The one-time manual step of creating the `tesseract-tfstate` bucket, enabling
+The one-time manual step of creating the `tesseract-homelab` bucket, enabling
 versioning, and minting a scoped R2 API token. Documented in ADR-0003 and the
 runbook. Cannot be automated by the Terraform config that *uses* the bucket as
 its backend.

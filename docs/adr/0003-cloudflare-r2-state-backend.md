@@ -34,11 +34,12 @@ built-in **`backend "s3"`** (R2 is S3-API-compatible).
 
 ### Bucket layout
 
-- **One bucket** for the whole homelab: `tesseract-tfstate` (exact name chosen
+- **One bucket** for the whole homelab: `tesseract-homelab` (exact name chosen
   at bootstrap; the bucket itself is created manually, see *Bootstrap* below).
-- **Per-environment key prefix**: `env:/{workspace}/terraform.tfstate`.
-  Initial workspace is `default` (homelab is a single environment; the prefix
-  leaves room for a future `staging`/`dr` split without re-architecting).
+- **State key:** `default.tfstate` (single-environment homelab today; the
+  legacy `env:/` path-templating is intentionally not used — modern Terraform
+  workspaces via the `workspaces { prefix = ... }` sub-block is the upgrade
+  path if a second environment ever appears).
 - **Object versioning enabled on the bucket** for accidental-overwrite recovery.
 - **Lifecycle policy**: keep all versions indefinitely (state is tiny; the cost
   is rounding error).
@@ -63,6 +64,11 @@ built-in **`backend "s3"`** (R2 is S3-API-compatible).
   `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3` pointing at the R2 S3 endpoint),
   **never in the repo**. See ADR on secrets (forthcoming).
 - Bucket is private; no public access.
+- **Path-style addressing required** (`force_path_style = true` in the backend
+  block). R2 has no TLS cert for virtual-host-style hostnames
+  (`<bucket>.<acct>.r2.cloudflarestorage.com`); the SDK's default fails with a
+  TLS handshake error. Path-style puts the bucket in the URL path instead,
+  against a host R2 does have a cert for.
 
 ## Bootstrap (one-time, manual)
 
@@ -70,7 +76,7 @@ The R2 bucket **cannot** be created by the Terraform configuration that uses it
 as a backend (chicken-and-egg). Manual steps, done once and recorded in the
 runbook:
 
-1. Cloudflare dashboard → R2 → create bucket `tesseract-tfstate`.
+1. Cloudflare dashboard → R2 → create bucket `tesseract-homelab`.
 2. Enable object versioning on the bucket.
 3. Create R2 API token scoped to this bucket (read/write/list).
 4. Store the Access Key ID + Secret in your password manager and (later) in CI

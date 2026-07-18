@@ -12,8 +12,8 @@ Use when a `terraform apply` produced unwanted changes and you want to
 restore the prior state object (not the prior *infrastructure* — that's
 separate).
 
-1. Cloudflare dashboard → R2 → `tesseract-tfstate` → object
-   `env:/default/terraform.tfstate` → **Versions**.
+1. Cloudflare dashboard → R2 → `tesseract-homelab` → object
+   `default.tfstate` → **Versions**.
 2. Find the last known-good version (timestamped). Download it.
 3. Upload it back as the current version of the same key (overwrite). R2
    treats this as a new version; the bad one is preserved as history.
