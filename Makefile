@@ -1,44 +1,29 @@
-# Tesseract homelab IaC — operator shortcuts.
-# See docs/adr/ for the decisions behind each command.
-
-# Terraform lives in terraform/ (ADR-0004). Every terraform command runs there.
 TF := cd terraform && terraform
 
-.PHONY: help init plan apply import-lxc import-vm check-ips fmt validate clean
+.PHONY: init plan apply import-lxc import-vm check-ips fmt validate
 
-help:  ## Show this help
-	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
+init:     ; $(TF) init
+plan:     ; $(TF) plan
+apply:    ; $(TF) apply
+fmt:      ; $(TF) fmt -recursive
+validate: ; $(TF) validate
+check-ips: ; @./scripts/check-ips
 
-init:  ## terraform init (pulls provider, connects to R2 backend)
-	$(TF) init
-
-plan:  ## terraform plan (reads tfvars; remember to source .env first)
-	$(TF) plan
-
-apply:  ## terraform apply (remember to source .env first)
-	$(TF) apply
-
-# Import an existing guest into state. ADR-0001: import-only, never recreate.
-# Usage: make import-lxc NAME=adguard
-# Usage: make import-vm  NAME=k3s_master01
-import-lxc:  ## Import an existing LXC into state. Usage: make import-lxc NAME=adguard
+# Import existing guest into state (never recreate).
+# bpg wants "node/vmid" form. Values pulled from tfvars via `terraform console`.
+# tr -cd keeps only the listed chars — defends against warnings leaking in.
+import-lxc:
 	@test -n "$(NAME)" || { echo "Usage: make import-lxc NAME=adguard"; exit 2; }
-	VMID=$$($(TF) output -raw lxc_guests 2>/dev/null | jq -r '.["$(NAME)"].vmid'); \
-	test -n "$$VMID" && $(TF) import "module.lxcs[\"$(NAME)\"].proxmox_virtual_environment_container.this" "$$VMID"
+	@NODE=$$(cd terraform && terraform console -no-color 2>/dev/null <<< 'var.node_name' | tr -cd 'a-zA-Z0-9'); \
+	VMID=$$(cd terraform && terraform console -no-color 2>/dev/null <<< 'var.lxcs["$(NAME)"].vmid' | tr -cd '0-9'); \
+	test -n "$$VMID" || { echo "No VMID for $(NAME) — is it in tfvars?"; exit 2; }; \
+	echo "Importing $(NAME) as $$NODE/$$VMID ..."; \
+	cd terraform && terraform import "module.lxcs[\"$(NAME)\"].proxmox_virtual_environment_container.this" "$$NODE/$$VMID"
 
-import-vm:  ## Import an existing VM into state. Usage: make import-vm NAME=k3s_master01
-	@test -n "$(NAME)" || { echo "Usage: make import-vm NAME=k3s_master01"; exit 2; }
-	VMID=$$($(TF) output -raw all_guests 2>/dev/null | jq -r '.["$(NAME)"].vmid'); \
-	test -n "$$VMID" && $(TF) import "module.vms[\"$(NAME)\"].proxmox_virtual_environment_vm.this" "$$VMID"
-
-check-ips:  ## Sentinel check (ADR-0007) — verify guests are at their expected_ip.
-	@./scripts/check-ips
-
-fmt:  ## terraform fmt
-	$(TF) fmt -recursive
-
-validate:  ## terraform validate
-	$(TF) validate
-
-clean:  ## Remove .terraform cache. State stays on R2.
-	rm -rf terraform/.terraform
+import-vm:
+	@test -n "$(NAME)" || { echo "Usage: make import-vm NAME=k3s-master01"; exit 2; }
+	@NODE=$$(cd terraform && terraform console -no-color 2>/dev/null <<< 'var.node_name' | tr -cd 'a-zA-Z0-9'); \
+	VMID=$$(cd terraform && terraform console -no-color 2>/dev/null <<< 'var.vms["$(NAME)"].vmid' | tr -cd '0-9'); \
+	test -n "$$VMID" || { echo "No VMID for $(NAME) — is it in tfvars?"; exit 2; }; \
+	echo "Importing $(NAME) as $$NODE/$$VMID ..."; \
+	cd terraform && terraform import "module.vms[\"$(NAME)\"].proxmox_virtual_environment_vm.this" "$$NODE/$$VMID"

@@ -1,3 +1,8 @@
+terraform {
+  required_providers {
+    proxmox = { source = "bpg/proxmox" }
+  }
+}
 
 resource "proxmox_virtual_environment_container" "this" {
   node_name = var.node_name
@@ -7,12 +12,12 @@ resource "proxmox_virtual_environment_container" "this" {
   description = coalesce(var.guest.description, var.name)
   tags        = concat(var.guest.tags, sort(var.tags_global))
 
-  # --- Fleet defaults baked in here (ADR-0005): unprivileged + nesting +
-  # keyctl, matching the existing homelab (per operator inventory).
   unprivileged = true
+  protection   = true
   features {
     nesting = true
     keyctl  = true
+    fuse    = true
   }
 
   start_on_boot = var.guest.start_on_boot
@@ -28,7 +33,7 @@ resource "proxmox_virtual_environment_container" "this" {
   }
 
   disk {
-    datastore_id = var.datastore_id
+    datastore_id = "local-lvm"
     size         = var.guest.disk_gb
   }
 
@@ -39,29 +44,37 @@ resource "proxmox_virtual_environment_container" "this" {
 
   initialization {
     hostname = var.name
-
     dns {
-      domain  = var.dns_domain
-      servers = var.dns_servers
+      domain  = "htrung.dev"
+      servers = ["1.1.1.1", "8.8.8.8"]
     }
-
-    # DHCP — the router is the IP authority (ADR-0007). We deliberately do NOT
-    # set ipv4.address here; that would make Terraform the authority and risk
-    # IP conflicts with the router's pool.
+    # DHCP — router owns IP assignment, no static address here.
     ip_config {
-      ipv4 {
-        address = "dhcp"
-      }
+      ipv4 { address = "dhcp" }
+      ipv6 { address = "auto" }
     }
   }
 
   network_interface {
     name    = "eth0"
-    bridge  = var.bridge
+    bridge  = "vmbr0"
     enabled = true
+  }
+
+  dynamic "device_passthrough" {
+    for_each = { for d in var.guest.device_passthroughs : d.path => d }
+    content {
+      path       = device_passthrough.value.path
+      gid        = device_passthrough.value.gid
+      uid        = device_passthrough.value.uid
+      mode       = device_passthrough.value.mode
+      deny_write = device_passthrough.value.deny_write
+    }
   }
 
   lifecycle {
     prevent_destroy = true
+    # Template only used at create time; imported guests don't track it.
+    ignore_changes = [operating_system[0].template_file_id]
   }
 }

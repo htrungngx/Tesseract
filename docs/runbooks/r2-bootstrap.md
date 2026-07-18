@@ -8,12 +8,12 @@ backend (chicken-and-egg). This is a one-time manual step.
 ## Steps
 
 1. Cloudflare dashboard → **R2** → **Create bucket**.
-2. Bucket name: `tesseract-tfstate` (must match `terraform/backend.tf`).
+2. Bucket name: `tesseract-homelab` (must match `terraform/backend.tf`).
 3. **Enable object versioning** on the bucket (under Settings). This is what
    makes state recovery possible (see `state-recovery.md`).
 4. Go to **R2 → Manage R2 API Tokens → Create API Token**.
    - Permissions: **Object Read & Write**.
-   - Specify bucket: `tesseract-tfstate` only (least privilege).
+   - Specify bucket: `tesseract-homelab` only (least privilege).
 5. Copy the **Access Key ID** and **Secret Access Key**.
 6. Find your Cloudflare account ID (dashboard URL or right sidebar). Construct
    the S3 endpoint: `https://<accountid>.r2.cloudflarestorage.com`.
@@ -38,7 +38,7 @@ If you see a locking error at this point, R2 conditional writes aren't working
 
 ## What lives where
 
-- **Bucket:** `tesseract-tfstate` (Cloudflare R2)
+- **Bucket:** `tesseract-homelab` (Cloudflare R2)
 - **State key:** `default.tfstate` (single-environment homelab today)
 - **Versioning:** on, all versions kept (state is tiny; cost is negligible)
 - **Access:** one R2 API token scoped to this bucket only
