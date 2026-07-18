@@ -44,3 +44,16 @@ variable "vms" {
   }))
   default = {}
 }
+
+# LXC templates managed by Terraform (ADR-0011). Key = stable name used in the
+# download resource address. `file_name` is what ends up in
+# `local:vztmpl/<file_name>` and must match the `os_template` path LXCs use.
+variable "templates" {
+  type = map(object({
+    url                = string
+    file_name          = string
+    checksum           = optional(string)
+    checksum_algorithm = optional(string)
+  }))
+  default = {}
+}

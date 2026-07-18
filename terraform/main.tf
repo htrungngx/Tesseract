@@ -44,3 +44,24 @@ module "vms" {
   tags_global = var.tags_global
   guest       = each.value
 }
+
+# LXC templates — Terraform pulls them via Proxmox's download-url API (ADR-0011).
+# Declared at root so the map can grow without touching modules/lxc.
+resource "proxmox_virtual_environment_download_file" "template" {
+  for_each = var.templates
+
+  node_name    = var.node_name
+  datastore_id = "local"
+  content_type = "vztmpl"
+  url          = each.value.url
+  file_name    = each.value.file_name
+
+  checksum           = each.value.checksum
+  checksum_algorithm = each.value.checksum_algorithm
+
+  # Removing a template from the map would delete it from pve01 storage and
+  # break any LXC still referencing it. Force a deliberate code change.
+  lifecycle {
+    prevent_destroy = true
+  }
+}
