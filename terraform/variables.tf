@@ -39,7 +39,6 @@ variable "vms" {
     cores         = number
     memory_mb     = number
     disk_gb       = number
-    bios          = optional(string, "seabios")
     tags          = optional(list(string), [])
     start_on_boot = optional(bool, true)
   }))
